@@ -23,6 +23,7 @@ public class InventoryWidget : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
+				"InputCore",
 				"UnrealAny",
 				"InventorySystem",
 				"UMG"

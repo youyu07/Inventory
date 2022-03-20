@@ -1,11 +1,11 @@
 #include "InventoryAreaWidget.h"
-#include "Slate/SInventoryAreaWidget.h"
 #include "Slate/SInventoryItemWidget.h"
-
+#include "Slate/SInventoryAreaWidget.h"
 
 TSharedRef<SWidget> UInventoryAreaWidget::RebuildWidget()
 {
-    MyWidget = SNew(SInventoryAreaWidget).ItemSize(ItemSize).Layout(Layout);
+    AreaObject = UInventoryItemArea::Make(this, Area, Layout);
+    MyWidget = SNew(SInventoryAreaWidget, AreaObject).ItemSize(ItemSize).Layout(Layout);
 
 #if WITH_EDITOR
     if (IsDesignTime()) {}
@@ -13,6 +13,7 @@ TSharedRef<SWidget> UInventoryAreaWidget::RebuildWidget()
 #endif
     {
         Update();
+        AreaObject->OnChanged.AddDynamic(this, &UInventoryAreaWidget::OnAreaChanged);
     }
 
     return MyWidget.ToSharedRef();
@@ -33,20 +34,21 @@ void UInventoryAreaWidget::ReleaseSlateResources(bool bReleaseChildren)
 }
 
 
+void UInventoryAreaWidget::OnAreaChanged(UInventoryItem* Item, EInventoryAreaChangeType Type, const FInventoryAreaChangeParam& Params)
+{
+    Update();
+}
+
 void UInventoryAreaWidget::Update()
 {
-    auto AreaObject = UInventoryItemArea::Make(this, Area, Layout);
+    MyWidget->ClearChildren();
 
-    if (MyWidget) {
-        MyWidget->ClearChildren();
-        auto Items = AreaObject->GetItems();
-
-        for (auto& It : Items)
-        {
-            auto Info = It.Key->Info;
-            MyWidget->AddSlot(It.Value, Info->Size)[
-                SNew(SInventoryItemWidget).Item(It.Key)
-            ];
-        }
+    auto Items = AreaObject->GetItems();
+    for (auto& It : Items)
+    {
+        auto Info = It.Key->Info;
+        MyWidget->AddSlot(It.Value, Info->Size)[
+            SNew(SInventoryItemWidget, It.Key)
+        ];
     }
 }

@@ -4,6 +4,7 @@
 #include "Slate/SInventoryAreaWidget.h"
 #include "SlateOptMacros.h"
 #include "Layout/LayoutUtils.h"
+#include "SInventoryItemWidget.h"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
@@ -12,18 +13,16 @@ SInventoryAreaWidget::SInventoryAreaWidget() : Children(this)
 }
 
 
-void SInventoryAreaWidget::Construct(const FArguments& InArgs)
+void SInventoryAreaWidget::Construct(const FArguments& InArgs, UInventoryItemArea* InArea)
 {
+	Area = InArea;
 	ItemSize = InArgs._ItemSize;
 	Layout = InArgs._Layout;
 	LineColor = InArgs._LineColor;
 
-	Children.Reserve(InArgs.Slots.Num());
-	for (int32 ChildIndex = 0; ChildIndex < InArgs.Slots.Num(); ChildIndex++)
-	{
-		FSlot* ChildSlot = InArgs.Slots[ChildIndex];
-		Children.Add(ChildSlot);
-	}
+	DragBoxBrush.TintColor = FLinearColor::Green * FLinearColor(1.0f, 1.0f, 1.0f, 0.2f);
+
+	Children.AddSlots(MoveTemp(const_cast<TArray<FSlot::FSlotArguments>&>(InArgs._Slots)));
 }
 void SInventoryAreaWidget::OnArrangeChildren(const FGeometry& AllottedGeometry, FArrangedChildren& ArrangedChildren) const
 {
@@ -68,9 +67,18 @@ int32 SInventoryAreaWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), Points, ESlateDrawEffect::None, LineColor, true);
 	}
 
+	
+
 	FArrangedChildren ArrangedChildren(EVisibility::Visible);
 	ArrangeChildren(AllottedGeometry, ArrangedChildren);
-	return PaintArrangedChildren(Args, ArrangedChildren, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
+	LayerId = PaintArrangedChildren(Args, ArrangedChildren, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
+
+	if (bShowDragBox) {
+		auto Geometry = AllottedGeometry.ToPaintGeometry(DragBox.Min, DragBox.GetSize(), 1.0f);
+		FSlateDrawElement::MakeBox(OutDrawElements, LayerId, Geometry, &DragBoxBrush, ESlateDrawEffect::None, DragBoxBrush.TintColor.GetSpecifiedColor());
+	}
+
+	return LayerId;
 }
 
 FVector2D SInventoryAreaWidget::ComputeDesiredSize(float) const
@@ -78,11 +86,9 @@ FVector2D SInventoryAreaWidget::ComputeDesiredSize(float) const
 	return FVector2D(ItemSize.X * Layout.X, ItemSize.Y * Layout.Y);
 }
 
-SInventoryAreaWidget::FSlot& SInventoryAreaWidget::AddSlot(FIntPoint InLocation, FIntPoint InSize)
+SInventoryAreaWidget::FScopedWidgetSlotArguments SInventoryAreaWidget::AddSlot(FIntPoint InLocation, FIntPoint InSize)
 {
-	FSlot& NewSlot = *(new FSlot(InLocation, InSize));
-	Children.Add(&NewSlot);
-	return NewSlot;
+	return FScopedWidgetSlotArguments{ MakeUnique<FSlot>(InLocation, InSize), Children, INDEX_NONE };
 }
 
 
@@ -103,6 +109,66 @@ bool SInventoryAreaWidget::RemoveAt(FIntPoint InLocation)
 void SInventoryAreaWidget::ClearChildren()
 {
 	Children.Empty();
+}
+
+
+static bool GetCanReplaceItems(const FGeometry& MyGeometry, const FDragDropEvent& DragDropEvent, const FVector2D& ItemSize, 
+	UInventoryItem*& SourceItem, UInventoryItemArea* CurArea, FIntPoint& OutLoc)
+{
+	if (auto Op = DragDropEvent.GetOperationAs<FInventoryItemDragDropOperation>()) {
+		auto Local = MyGeometry.AbsoluteToLocal(DragDropEvent.GetScreenSpacePosition());
+		SourceItem = Op->GetItem();
+
+		if (!CurArea->IsCanAcceptTypes(SourceItem->Info->Types))return false;
+
+		auto StartLoction = Local - FVector2D(SourceItem->Info->Size) * ItemSize * 0.5f;
+		OutLoc = FIntPoint(FMath::RoundToInt(StartLoction.X / ItemSize.X), FMath::RoundToInt(StartLoction.Y / ItemSize.Y));
+
+		bool OutBound = false;
+		auto Items = CurArea->GetUnderItems(OutLoc, SourceItem->Info->Size, OutBound);
+		if (!OutBound) {
+			if (Items.Num() == 0) { return true; }
+			if (Items.Num() == 1 && Items[0] == SourceItem)return true;
+		}
+	}
+
+	return false;
+}
+
+
+FReply SInventoryAreaWidget::OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& DragDropEvent)
+{
+	FIntPoint Loc;
+	UInventoryItem *SourceItem;
+	bShowDragBox = GetCanReplaceItems(MyGeometry, DragDropEvent, ItemSize, SourceItem, Area, Loc);
+	if (bShowDragBox) {
+		auto Start = FVector2D(Loc) * ItemSize;
+		auto End = FVector2D(SourceItem->Info->Size) * ItemSize + Start;
+		DragBox = FBox2D(Start, End);
+	}
+	return FReply::Unhandled();
+}
+
+void SInventoryAreaWidget::OnDragLeave(const FDragDropEvent& DragDropEvent)
+{
+	bShowDragBox = false;
+}
+
+FReply SInventoryAreaWidget::OnDrop(const FGeometry& MyGeometry, const FDragDropEvent& DragDropEvent)
+{
+	FIntPoint Loc;
+	UInventoryItem* SourceItem;
+	if (GetCanReplaceItems(MyGeometry, DragDropEvent, ItemSize, SourceItem, Area, Loc)) {
+		if (SourceItem->Area == Area) {
+			Area->MoveItem(SourceItem, Loc);
+		}
+		else {
+			SourceItem->Area->RemoveItem(SourceItem);
+			Area->AddItem(SourceItem, Loc);
+		}
+	}
+	bShowDragBox = false;
+	return FReply::Handled();
 }
 
 

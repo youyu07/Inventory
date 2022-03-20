@@ -36,14 +36,14 @@ public:
 		, _Layout(2)
 		, _LineColor(FLinearColor::White)
 	{}
-	SLATE_SUPPORTS_SLOT(FSlot)
+	SLATE_SLOT_ARGUMENT(FSlot, Slots)
 	SLATE_ARGUMENT(FVector2D, ItemSize)
 	SLATE_ARGUMENT(FIntPoint, Layout)
 	SLATE_ARGUMENT(FLinearColor, LineColor)
 	SLATE_END_ARGS()
 
 public:
-	void Construct(const FArguments& InArgs);
+	void Construct(const FArguments& InArgs, class UInventoryItemArea* InArea);
 
 	void SetItemSize(const FVector2D& InItemSize)
 	{
@@ -60,7 +60,9 @@ public:
 		LineColor = InColor;
 	}
 
-	FSlot& AddSlot(FIntPoint InLocation, FIntPoint InSize);
+	using FScopedWidgetSlotArguments = TPanelChildren<FSlot>::FScopedWidgetSlotArguments;
+
+	FScopedWidgetSlotArguments AddSlot(FIntPoint InLocation, FIntPoint InSize);
 	bool RemoveAt(FIntPoint InLocation);
 	void ClearChildren();
 
@@ -71,16 +73,26 @@ public:
 
 	virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
 
+
+	virtual FReply OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& DragDropEvent) override;
+	virtual void OnDragLeave(const FDragDropEvent& DragDropEvent) override;
+	virtual FReply OnDrop(const FGeometry& MyGeometry, const FDragDropEvent& DragDropEvent) override;
 protected:
 
 	// Begin SWidget overrides.
 	virtual FVector2D ComputeDesiredSize(float) const override;
 	// End SWidget overrides.
 private:
+
+	class UInventoryItemArea* Area = nullptr;
 	FIntPoint Layout;
 	FVector2D ItemSize;
 	TAttribute<FMargin> SlotPadding;
 	TPanelChildren<FSlot> Children;
 
 	FLinearColor LineColor;
+
+	bool bShowDragBox = false;
+	FBox2D DragBox;
+	FSlateBrush DragBoxBrush;
 };

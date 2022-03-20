@@ -15,27 +15,6 @@ UInventoryItemInfo* UInventoryItemInfo::Find(FName InId)
 	return nullptr;
 }
 
-
-bool UInventoryItem::Move(FIntPoint ToLocation, UInventoryItem*& BelowItem, UInventoryItemArea* ToArea, bool bTest)
-{
-	auto NextArea = ToArea ? ToArea : Area;
-	if (!NextArea->IsCanAcceptTypes(Info->Types))return false;
-
-	bool OutBound = false;
-	auto Items = NextArea->GetUnderItems(ToLocation, Info->Size, OutBound);
-	if (Items.Num() > 1 || OutBound) {
-		return false;
-	}
-	BelowItem = Items[0];
-	if (!bTest) {
-		Area->RemoveItem(this);
-		Area = ToArea;
-		Area->AddItem(this, ToLocation);
-	}
-
-	return true;
-}
-
 void UInventoryItem::Delete()
 {
 	Area->RemoveItem(this);
@@ -49,7 +28,7 @@ UInventoryItemArea* UInventoryItemArea::Make(UObject* WorldContextObject, FName 
 
 	auto AreaObject = Find(WorldContextObject, Area);
 	if (!AreaObject) {
-		FName FullName = *FString::Printf(L"InventoryItemArea_%s", *Area.ToString());
+		FName FullName = FName(*FString::Printf(L"InventoryItemArea_%s", *Area.ToString()), 0);
 		FullName = MakeUniqueObjectName(WorldContextObject, UInventoryItemArea::StaticClass(), FullName);
 		AreaObject = NewObject<UInventoryItemArea>(World, FullName);
 		World->ExtraReferencedObjects.Add(AreaObject);
@@ -73,7 +52,7 @@ UInventoryItemArea* UInventoryItemArea::Find(UObject* WorldContextObject, FName 
 {
 	check(WorldContextObject->GetWorld());
 
-	FName FullName = *FString::Printf(L"InventoryItemArea_%s", *Area.ToString());
+	FName FullName = FName(*FString::Printf(L"InventoryItemArea_%s", *Area.ToString()), 0);
 	for (TObjectIterator<UInventoryItemArea> It; It; ++It)
 	{
 		if (It->GetFName().IsEqual(FullName, ENameCase::CaseSensitive, false) && It->GetWorld() == WorldContextObject->GetWorld()) return *It;
@@ -92,7 +71,7 @@ UInventoryItem* UInventoryItemArea::MakeItem(UInventoryItemInfo* Info, FIntPoint
 
 	auto Id = Info->GetFName();
 
-	FName FullName = *FString::Printf(L"InventoryItem%s", *Id.ToString());
+	FName FullName = FName(*FString::Printf(L"InventoryItem%s", *Id.ToString()), 0);
 	FullName = MakeUniqueObjectName(this, UInventoryItemArea::StaticClass(), FullName);
 	auto Obj = NewObject<UInventoryItem>(this, UInventoryItem::StaticClass(), FullName);
 	Obj->Area = this;
@@ -110,10 +89,10 @@ const TArray<UInventoryItem*> UInventoryItemArea::GetUnderItems(FIntPoint Locati
 		for (int32 x = Location.X; x < Location.X + Size.X; x++)
 		{
 			auto Index = y * Layout.X + x;
-			if (Items[Index]) Temp.Add(Items[Index]);
+			if (Items.IsValidIndex(Index) && Items[Index]) Temp.Add(Items[Index]);
 		}
 	}
-	bOutBound = (Location.X + Size.X > Layout.X) || (Location.Y + Size.Y > Layout.Y);
+	bOutBound = Location.X < 0 || Location.Y < 0 || (Location.X + Size.X > Layout.X) || (Location.Y + Size.Y > Layout.Y);
 
 	return Temp.Array();
 }
@@ -191,14 +170,53 @@ void UInventoryItemArea::AddItem(UInventoryItem* Item, const FIntPoint& InLocati
 			Items[y * Layout.X + x] = Item;
 		}
 	}
+	Item->Area = this;
+	OnChanged.Broadcast(Item, EInventoryAreaChangeType::Add, FInventoryAreaChangeParam());
 }
 
-void UInventoryItemArea::RemoveItem(UInventoryItem* Item)
+bool UInventoryItemArea::RemoveItem(UInventoryItem* Item)
 {
+	if (!Items.Contains(Item))return false;
 	for (int32 i = 0; i < Items.Num(); i++)
 	{
 		if (Items[i] == Item)Items[i] = nullptr;
 	}
+	Item->Area = nullptr;
+	OnChanged.Broadcast(Item, EInventoryAreaChangeType::Remove, FInventoryAreaChangeParam());
+	return true;
+}
+
+bool UInventoryItemArea::MoveItem(UInventoryItem* Item, const FIntPoint& ToLocation)
+{
+	if (!Items.Contains(Item))return false;
+
+	FIntPoint PreLcation;
+	bool bInitialLocation = false;
+	for (int32 i = 0; i < Items.Num(); i++)
+	{
+		if (Items[i] == Item) {
+			Items[i] = nullptr;
+
+			if (!bInitialLocation) {
+				bInitialLocation = true;
+				PreLcation = FIntPoint(i % Layout.X, i / Layout.X);
+			}
+		}
+	}
+	for (int32 y = ToLocation.Y; y < ToLocation.Y + Item->Info->Size.Y; y++)
+	{
+		for (int32 x = ToLocation.X; x < ToLocation.X + Item->Info->Size.X; x++)
+		{
+			Items[y * Layout.X + x] = Item;
+		}
+	}
+
+	FInventoryAreaChangeParam Params;
+	Params.Params.Add("FromLocation", PreLcation);
+	Params.Params.Add("ToLocation", ToLocation);
+
+	OnChanged.Broadcast(Item, EInventoryAreaChangeType::Remove, Params);
+	return true;
 }
 
 
