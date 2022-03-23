@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "UnrealAny.h"
+#include "Engine/DataTable.h"
 #include "InventoryTypes.generated.h"
 
 UENUM(BlueprintType)
@@ -11,6 +12,7 @@ enum class EInventoryAreaChangeType : uint8
 	Add,
 	Remove,
 	Move,
+	Refresh,
 };
 
 USTRUCT(Blueprintable)
@@ -22,7 +24,7 @@ struct INVENTORYSYSTEM_API FInventoryAreaChangeParam
 	TMap<FName, FAny> Params;
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnInventoryAreaItemChanged, UInventoryItem*, Item, EInventoryAreaChangeType, Type, const FInventoryAreaChangeParam&, Params);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryAreaChanged, EInventoryAreaChangeType, Type, const FInventoryAreaChangeParam&, Params);
 
 
 UCLASS()
@@ -45,10 +47,10 @@ public:
 
 	//物品背景框颜色
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	FLinearColor BackgroundColor = FLinearColor::Transparent;
+	FLinearColor BackgroundColor = FLinearColor(0.0f, 0.0f, 0.0f, 0.2f);
 
 	//物品其他需要显示的属性
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (MultiLine = "true"))
 	TMap<FName, FText> Descript;
 
 public:
@@ -73,10 +75,6 @@ public:
 
 	UPROPERTY(BlueprintReadWrite)
 	TMap<FName, FAny> Custom;
-
-public:
-	UFUNCTION(BlueprintCallable, Category = Item)
-	void Delete();
 };
 
 
@@ -95,7 +93,7 @@ public:
 	TSet<FName> AcceptTypes;
 
 	UPROPERTY(BlueprintAssignable)
-	FOnInventoryAreaItemChanged OnChanged;
+	FOnInventoryAreaChanged OnChanged;
 
 	//查找或创建物品区域对象
 	UFUNCTION(BlueprintCallable, meta = (WorldContext = "WorldContextObject", DisplayName = "Make Item Area"), Category = Item)
@@ -106,8 +104,8 @@ public:
 	static UInventoryItemArea* Find(UObject* WorldContextObject, FName Area);
 
 	//创建物品对象
-	UFUNCTION(BlueprintCallable, Category = Item)
-	UInventoryItem* MakeItem(UInventoryItemInfo* Info, FIntPoint InLocation);
+	UFUNCTION(BlueprintCallable, meta = (AdvancedDisplay="bExecDelegate"), Category = Item)
+	UInventoryItem* MakeItem(UInventoryItemInfo* Info, FIntPoint InLocation, bool bExecDelegate = true);
 
 	//获取一定范围内的所有物品对象
 	UFUNCTION(BlueprintPure, Category = Item)
@@ -122,21 +120,39 @@ public:
 	const TMap<UInventoryItem*, FIntPoint> GetItems() const;
 
 	//向区域内添加物品，添加前请使用IsCanAcceptTypes判断此区域是否接受物品类型
-	UFUNCTION(BlueprintCallable, Category = Item)
-	void AddItem(UInventoryItem* Item, const FIntPoint& InLocation);
+	UFUNCTION(BlueprintCallable, meta = (AdvancedDisplay = "bExecDelegate"), Category = Item)
+	void AddItem(UInventoryItem* Item, const FIntPoint& InLocation, bool bExecDelegate = true);
 
 	//移除物品
-	UFUNCTION(BlueprintCallable, Category = Item)
-	bool RemoveItem(UInventoryItem* Item);
+	UFUNCTION(BlueprintCallable, meta = (AdvancedDisplay = "bExecDelegate"), Category = Item)
+	bool RemoveItem(UInventoryItem* Item, bool bExecDelegate = true);
 
 	//同区域内移动物品
-	UFUNCTION(BlueprintCallable, Category = Item)
-	bool MoveItem(UInventoryItem* Item, const FIntPoint& ToLocation);
+	UFUNCTION(BlueprintCallable, meta = (AdvancedDisplay = "bExecDelegate"), Category = Item)
+	bool MoveItem(UInventoryItem* Item, const FIntPoint& ToLocation, bool bExecDelegate = true);
 
 	//判断此区域是否接受传入的物品类型
 	UFUNCTION(BlueprintPure, Category = Item)
 	bool IsCanAcceptTypes(const TSet<FName>& Other) const;
+
+	//对物品进行排序
+	UFUNCTION(BlueprintCallable, meta = (AdvancedDisplay = "bExecDelegate"), Category = Item)
+	void SortItem(bool bExecDelegate = true);
 private:
 	UPROPERTY(Transient)
 	TArray<UInventoryItem*> Items;
+};
+
+
+//食谱配方
+USTRUCT(BlueprintInternalUseOnly)
+struct FInventoryItemRecipeRow : public FTableRowBase
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere)
+	TArray<UInventoryItemInfo*> Source;
+
+	UPROPERTY(EditAnywhere)
+	UInventoryItemInfo* Destination;
 };

@@ -13,9 +13,8 @@
 UCLASS()
 class UInventoryAreaWidget : public UWidget
 {
-	GENERATED_BODY()
-	
-protected:
+	GENERATED_UCLASS_BODY()
+public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ExposeOnSpawn = true))
 	FName Area;
 
@@ -27,6 +26,12 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ExposeOnSpawn = true))
 	FLinearColor LineColor = FLinearColor::White;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (RequiredAssetDataTags = "RowStructure=RichTextStyleRow", ExposeOnSpawn = true))
+	TObjectPtr<class UDataTable> TipTextStyleSet;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ExposeOnSpawn = true))
+	FSlateBrush TipBackground;
 public:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 
@@ -40,10 +45,13 @@ public:
 
 private:
 	UFUNCTION()
-	void OnAreaChanged(UInventoryItem* Item, EInventoryAreaChangeType Type, const FInventoryAreaChangeParam& Params);
+	void OnAreaChanged(EInventoryAreaChangeType Type, const FInventoryAreaChangeParam& Params);
 
 	void Update();
 private:
 	TSharedPtr<class SInventoryAreaWidget> MyWidget;
 	UInventoryItemArea* AreaObject = nullptr;
+
+	FTextBlockStyle DefaultTipTextStyle;
+	TSharedPtr<class FSlateStyleSet> TipStyleSet;
 };

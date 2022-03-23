@@ -15,12 +15,6 @@ UInventoryItemInfo* UInventoryItemInfo::Find(FName InId)
 	return nullptr;
 }
 
-void UInventoryItem::Delete()
-{
-	Area->RemoveItem(this);
-}
-
-
 UInventoryItemArea* UInventoryItemArea::Make(UObject* WorldContextObject, FName Area, FIntPoint InLayout)
 {
 	auto World = WorldContextObject->GetWorld();
@@ -61,7 +55,7 @@ UInventoryItemArea* UInventoryItemArea::Find(UObject* WorldContextObject, FName 
 }
 
 
-UInventoryItem* UInventoryItemArea::MakeItem(UInventoryItemInfo* Info, FIntPoint InLocation)
+UInventoryItem* UInventoryItemArea::MakeItem(UInventoryItemInfo* Info, FIntPoint InLocation, bool bExecDelegate)
 {
 	if (!IsCanAcceptTypes(Info->Types))return nullptr;
 	bool OutBound = false;
@@ -77,7 +71,7 @@ UInventoryItem* UInventoryItemArea::MakeItem(UInventoryItemInfo* Info, FIntPoint
 	Obj->Area = this;
 	Obj->Info = Info;
 
-	AddItem(Obj, InLocation);
+	AddItem(Obj, InLocation, bExecDelegate);
 	return Obj;
 }
 
@@ -116,6 +110,7 @@ bool UInventoryItemArea::FindLocation(FIntPoint Size, FIntPoint& OutLocation) co
 	{
 		for (int32 x = 0; x < Layout.X; x++)
 		{
+			if(x + Size.X > Layout.X || y + Size.Y > Layout.Y) continue;
 			auto Loc = FIntPoint(x, y);
 			if (IsBlank(Loc)) {
 				OutLocation = Loc;
@@ -161,7 +156,7 @@ const TMap<UInventoryItem*, FIntPoint> UInventoryItemArea::GetItems() const
 }
 
 
-void UInventoryItemArea::AddItem(UInventoryItem* Item, const FIntPoint& InLocation)
+void UInventoryItemArea::AddItem(UInventoryItem* Item, const FIntPoint& InLocation, bool bExecDelegate)
 {
 	for (int32 y = InLocation.Y; y < InLocation.Y + Item->Info->Size.Y; y++)
 	{
@@ -171,10 +166,14 @@ void UInventoryItemArea::AddItem(UInventoryItem* Item, const FIntPoint& InLocati
 		}
 	}
 	Item->Area = this;
-	OnChanged.Broadcast(Item, EInventoryAreaChangeType::Add, FInventoryAreaChangeParam());
+	if (bExecDelegate) {
+		FInventoryAreaChangeParam Params;
+		Params.Params.Add("Item", Item);
+		OnChanged.Broadcast(EInventoryAreaChangeType::Add, Params);
+	}
 }
 
-bool UInventoryItemArea::RemoveItem(UInventoryItem* Item)
+bool UInventoryItemArea::RemoveItem(UInventoryItem* Item, bool bExecDelegate)
 {
 	if (!Items.Contains(Item))return false;
 	for (int32 i = 0; i < Items.Num(); i++)
@@ -182,11 +181,15 @@ bool UInventoryItemArea::RemoveItem(UInventoryItem* Item)
 		if (Items[i] == Item)Items[i] = nullptr;
 	}
 	Item->Area = nullptr;
-	OnChanged.Broadcast(Item, EInventoryAreaChangeType::Remove, FInventoryAreaChangeParam());
+	if (bExecDelegate) {
+		FInventoryAreaChangeParam Params;
+		Params.Params.Add("Item", Item);
+		OnChanged.Broadcast(EInventoryAreaChangeType::Remove, Params);
+	}
 	return true;
 }
 
-bool UInventoryItemArea::MoveItem(UInventoryItem* Item, const FIntPoint& ToLocation)
+bool UInventoryItemArea::MoveItem(UInventoryItem* Item, const FIntPoint& ToLocation, bool bExecDelegate)
 {
 	if (!Items.Contains(Item))return false;
 
@@ -211,12 +214,46 @@ bool UInventoryItemArea::MoveItem(UInventoryItem* Item, const FIntPoint& ToLocat
 		}
 	}
 
-	FInventoryAreaChangeParam Params;
-	Params.Params.Add("FromLocation", PreLcation);
-	Params.Params.Add("ToLocation", ToLocation);
-
-	OnChanged.Broadcast(Item, EInventoryAreaChangeType::Remove, Params);
+	if (bExecDelegate) {
+		FInventoryAreaChangeParam Params;
+		Params.Params.Add("Item", Item);
+		Params.Params.Add("FromLocation", PreLcation);
+		Params.Params.Add("ToLocation", ToLocation);
+		OnChanged.Broadcast(EInventoryAreaChangeType::Remove, Params);
+	}
 	return true;
+}
+
+
+void UInventoryItemArea::SortItem(bool bExecDelegate)
+{
+	TSet<UInventoryItem*> Temp;
+	for (int32 i = 0; i < Items.Num(); i++)
+	{
+		if (Items[i]) {
+			Temp.Add(Items[i]);
+		}
+		Items[i] = nullptr;
+	}
+
+	if (Temp.Num() == 0)return;
+
+	Temp.Sort([](const UInventoryItem& A, const UInventoryItem& B) {
+		if (A.Info->Size.Y == B.Info->Size.Y) {
+			return A.Info->Size.X > B.Info->Size.X;
+		}
+		return A.Info->Size.Y > B.Info->Size.Y;
+	});
+
+	for (auto& i : Temp)
+	{
+		FIntPoint Location;
+		if (FindLocation(i->Info->Size, Location)) {
+			AddItem(i, Location, false);
+		}
+	}
+
+	if (bExecDelegate)OnChanged.Broadcast(EInventoryAreaChangeType::Refresh, FInventoryAreaChangeParam());
 }
 
 

@@ -19,9 +19,6 @@ void SInventoryAreaWidget::Construct(const FArguments& InArgs, UInventoryItemAre
 	ItemSize = InArgs._ItemSize;
 	Layout = InArgs._Layout;
 	LineColor = InArgs._LineColor;
-
-	DragBoxBrush.TintColor = FLinearColor::Green * FLinearColor(1.0f, 1.0f, 1.0f, 0.2f);
-
 	Children.AddSlots(MoveTemp(const_cast<TArray<FSlot::FSlotArguments>&>(InArgs._Slots)));
 }
 void SInventoryAreaWidget::OnArrangeChildren(const FGeometry& AllottedGeometry, FArrangedChildren& ArrangedChildren) const
@@ -74,7 +71,7 @@ int32 SInventoryAreaWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId = PaintArrangedChildren(Args, ArrangedChildren, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 
 	if (bShowDragBox) {
-		auto Geometry = AllottedGeometry.ToPaintGeometry(DragBox.Min, DragBox.GetSize(), 1.0f);
+		auto Geometry = AllottedGeometry.ToPaintGeometry(DragBox.Min + 1.0f, DragBox.GetSize() - 2.0f, 1.0f);
 		FSlateDrawElement::MakeBox(OutDrawElements, LayerId, Geometry, &DragBoxBrush, ESlateDrawEffect::None, DragBoxBrush.TintColor.GetSpecifiedColor());
 	}
 
@@ -145,6 +142,11 @@ FReply SInventoryAreaWidget::OnDragOver(const FGeometry& MyGeometry, const FDrag
 		auto Start = FVector2D(Loc) * ItemSize;
 		auto End = FVector2D(SourceItem->Info->Size) * ItemSize + Start;
 		DragBox = FBox2D(Start, End);
+
+		
+		DragBoxBrush.TintColor = SourceItem->Info->BackgroundColor.A == 0.0f ? 
+			FLinearColor::Black * FLinearColor(1.0f, 1.0f, 1.0f, 0.2f)
+			: SourceItem->Info->BackgroundColor;
 	}
 	return FReply::Unhandled();
 }
