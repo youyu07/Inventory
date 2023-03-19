@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "UnrealAny.h"
+#include "Engine/DataTable.h"
 #include "InventoryTypes.generated.h"
 
 UENUM(BlueprintType)
@@ -70,10 +71,6 @@ public:
 
 	UPROPERTY(BlueprintReadWrite)
 	TMap<FName, FAny> Custom;
-
-public:
-	UFUNCTION(BlueprintCallable, Category = Item)
-	void Delete();
 };
 
 
@@ -92,7 +89,7 @@ public:
 	TSet<FName> AcceptTypes;
 
 	UPROPERTY(BlueprintAssignable)
-	FOnInventoryAreaItemChanged OnChanged;
+	FOnInventoryAreaChanged OnChanged;
 
 	//查找或创建物品区域对象
 	UFUNCTION(BlueprintCallable, meta = (WorldContext = "WorldContextObject", DisplayName = "Make Item Area"), Category = Item)
@@ -122,16 +119,16 @@ public:
 	}
 
 	//向区域内添加物品，添加前请使用IsCanAcceptTypes判断此区域是否接受物品类型
-	UFUNCTION(BlueprintCallable, Category = Item)
-	void AddItem(UInventoryItem* Item, const FIntPoint& InLocation);
+	UFUNCTION(BlueprintCallable, meta = (AdvancedDisplay = "bExecDelegate"), Category = Item)
+	void AddItem(UInventoryItem* Item, const FIntPoint& InLocation, bool bExecDelegate = true);
 
 	//移除物品
-	UFUNCTION(BlueprintCallable, Category = Item)
-	bool RemoveItem(UInventoryItem* Item);
+	UFUNCTION(BlueprintCallable, meta = (AdvancedDisplay = "bExecDelegate"), Category = Item)
+	bool RemoveItem(UInventoryItem* Item, bool bExecDelegate = true);
 
 	//同区域内移动物品
-	UFUNCTION(BlueprintCallable, Category = Item)
-	bool MoveItem(UInventoryItem* Item, const FIntPoint& ToLocation);
+	UFUNCTION(BlueprintCallable, meta = (AdvancedDisplay = "bExecDelegate"), Category = Item)
+	bool MoveItem(UInventoryItem* Item, const FIntPoint& ToLocation, bool bExecDelegate = true);
 
 	//判断此区域是否接受传入的物品类型
 	UFUNCTION(BlueprintPure, Category = Item)
@@ -155,7 +152,18 @@ private:
 
 
 	TMap<FIntPoint, UInventoryItem*> ItemMap;
+};
 
-	/*UPROPERTY(Transient)
-	TArray<UInventoryItem*> Items;*/
+
+//食谱配方
+USTRUCT(BlueprintInternalUseOnly)
+struct FInventoryItemRecipeRow : public FTableRowBase
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere)
+	TArray<UInventoryItemInfo*> Source;
+
+	UPROPERTY(EditAnywhere)
+	UInventoryItemInfo* Destination;
 };

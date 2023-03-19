@@ -34,6 +34,9 @@ class SInventoryItemWidget : public SCompoundWidget
 public:
 	SLATE_BEGIN_ARGS(SInventoryItemWidget)
 	{}
+	SLATE_ARGUMENT(const ISlateStyle*, TipStyleSet)
+	SLATE_STYLE_ARGUMENT(FTextBlockStyle, TextStyle)
+	SLATE_ARGUMENT(const FSlateBrush*, TipBackground)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs, UInventoryItem* InItem);

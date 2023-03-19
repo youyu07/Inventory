@@ -1,11 +1,36 @@
 #include "InventoryAreaWidget.h"
 #include "Slate/SInventoryItemWidget.h"
 #include "Slate/SInventoryAreaWidget.h"
+#include "Components/RichTextBlock.h"
+
+
+UInventoryAreaWidget::UInventoryAreaWidget(const FObjectInitializer& ObjectInitializer)
+    : Super(ObjectInitializer)
+{
+    DefaultTipTextStyle = FCoreStyle::Get().GetWidgetStyle<FTextBlockStyle>("NormalText");
+}
+
 
 TSharedRef<SWidget> UInventoryAreaWidget::RebuildWidget()
 {
     AreaObject = UInventoryItemArea::Make(this, Area, Layout);
     MyWidget = SNew(SInventoryAreaWidget, AreaObject).ItemSize(ItemSize).Layout(Layout);
+
+    TipStyleSet = MakeShareable(new FSlateStyleSet("InventoryItemTipStyleSet"));
+	if (TipTextStyleSet && TipTextStyleSet->GetRowStruct()->IsChildOf(FRichTextStyleRow::StaticStruct()))
+	{
+		for (const auto& Entry : TipTextStyleSet->GetRowMap())
+		{
+			FName SubStyleName = Entry.Key;
+			FRichTextStyleRow* RichTextStyle = (FRichTextStyleRow*)Entry.Value;
+
+			if (SubStyleName == FName(TEXT("Default")))
+			{
+				DefaultTipTextStyle = RichTextStyle->TextStyle;
+			}
+			TipStyleSet->Set(SubStyleName, RichTextStyle->TextStyle);
+		}
+	}
 
 #if WITH_EDITOR
     if (IsDesignTime()) {}

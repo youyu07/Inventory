@@ -20,11 +20,34 @@ void SInventoryItemWidget::Construct(const FArguments& InArgs, UInventoryItem* I
 	}
 
 	check(Item);
-	auto Panel = SNew(SScaleBox)
+	TSharedRef<SWidget> Panel = SNew(SScaleBox)
 		.StretchDirection(EStretchDirection::DownOnly)
 		.Stretch(EStretch::ScaleToFit)[
 			SNew(SImage).Image(&IconBrush)
 		];
+
+
+	auto Descript = InItem->Info->Descript;
+	if (auto Tip = Descript.Find("Tip")) {
+		auto TipWidget = SNew(SToolTip).BorderImage(TipBackground)[
+			SNew(SRichTextBlock)
+				.TextStyle(InArgs._TextStyle)
+				.DecoratorStyleSet(InArgs._TipStyleSet)
+				.Text(*Tip)
+		];
+		SetToolTip(TipWidget);
+	}
+
+	if (auto Name = Descript.Find("Name")) {
+		Panel = SNew(SOverlay) + SOverlay::Slot()[
+			Panel
+		] + SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top)[
+			SNew(SRichTextBlock)
+				.TextStyle(InArgs._TextStyle)
+				.DecoratorStyleSet(InArgs._TipStyleSet)
+				.Text(*Name)
+		];
+	}
 
 	ChildSlot.Padding(1.0f)
 	[
@@ -33,6 +56,8 @@ void SInventoryItemWidget::Construct(const FArguments& InArgs, UInventoryItem* I
 			Panel
 		]
 	];
+
+	
 }
 
 FReply SInventoryItemWidget::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
@@ -67,7 +92,9 @@ TSharedRef<FInventoryItemDragDropOperation> FInventoryItemDragDropOperation::New
 	Operation->ItemSize = InItemSize;
 	Operation->PointerIndex = InPointerIndex;
 
-	InItem->SetVisibility(EVisibility::Hidden);
+	InItem->SetColorAndOpacity(FLinearColor(1.0f, 1.0f, 1.0f, 0.2f));
+
+	//InItem->SetVisibility(EVisibility::Hidden);
 	Operation->Construct();
 	return Operation;
 }
@@ -88,7 +115,9 @@ TSharedPtr<SWidget> FInventoryItemDragDropOperation::GetDefaultDecorator() const
 void FInventoryItemDragDropOperation::OnDrop(bool bDropWasHandled, const FPointerEvent& MouseEvent)
 {
 	if (MouseEvent.GetPointerIndex() == PointerIndex) {
-		Item->SetVisibility(EVisibility::Visible);
+		Item->SetColorAndOpacity(FLinearColor(1.0f, 1.0f, 1.0f, 1.0f));
+
+		//Item->SetVisibility(EVisibility::Visible);
 	}
 }
 

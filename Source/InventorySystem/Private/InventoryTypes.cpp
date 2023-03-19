@@ -16,12 +16,6 @@ UInventoryItemInfo* UInventoryItemInfo::Find(FName InId)
 	return nullptr;
 }
 
-void UInventoryItem::Delete()
-{
-	Area->RemoveItem(this);
-}
-
-
 UInventoryItemArea* UInventoryItemArea::Make(UObject* WorldContextObject, FName Area, FIntPoint InLayout)
 {
 	auto World = WorldContextObject->GetWorld();
@@ -128,7 +122,7 @@ void UInventoryItemArea::AddItem(UInventoryItem* Item, const FIntPoint& InLocati
 	OnChanged.Broadcast(Event);
 }
 
-bool UInventoryItemArea::RemoveItem(UInventoryItem* Item)
+bool UInventoryItemArea::RemoveItem(UInventoryItem* Item, bool bExecDelegate)
 {
 	bool bHas = false;
 	for (auto It = SingleItemMap.CreateIterator(); It; ++It)
@@ -155,7 +149,7 @@ bool UInventoryItemArea::RemoveItem(UInventoryItem* Item)
 	return bHas;
 }
 
-bool UInventoryItemArea::MoveItem(UInventoryItem* Item, const FIntPoint& ToLocation)
+bool UInventoryItemArea::MoveItem(UInventoryItem* Item, const FIntPoint& ToLocation, bool bExecDelegate)
 {
 	FIntPoint PreLcation = -1;
 	for (auto It = SingleItemMap.CreateIterator(); It; ++It)
