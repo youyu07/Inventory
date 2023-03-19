@@ -4,7 +4,8 @@
 
 TMap<FName, UInventoryItemInfo*> UInventoryItemInfo::Map = TMap<FName, UInventoryItemInfo*>();
 
-UInventoryItemInfo::UInventoryItemInfo(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+UInventoryItemInfo::UInventoryItemInfo(const FObjectInitializer& ObjectInitializer) 
+	: Super(ObjectInitializer)
 {
 	
 }
@@ -24,7 +25,7 @@ void UInventoryItem::Delete()
 UInventoryItemArea* UInventoryItemArea::Make(UObject* WorldContextObject, FName Area, FIntPoint InLayout)
 {
 	auto World = WorldContextObject->GetWorld();
-	check(World);
+	if(!World) return nullptr;
 
 	auto AreaObject = Find(WorldContextObject, Area);
 	if (!AreaObject) {
@@ -44,7 +45,6 @@ UInventoryItemArea* UInventoryItemArea::Make(UObject* WorldContextObject, FName 
 #endif
 	}
 	AreaObject->Layout = InLayout;
-	AreaObject->Items.SetNum(InLayout.X * InLayout.Y);
 	return AreaObject;
 }
 
@@ -61,70 +61,41 @@ UInventoryItemArea* UInventoryItemArea::Find(UObject* WorldContextObject, FName 
 }
 
 
-UInventoryItem* UInventoryItemArea::MakeItem(UInventoryItemInfo* Info, FIntPoint InLocation)
+UInventoryItem* UInventoryItemArea::MakeItem(UInventoryItemInfo* Info)
 {
-	if (!IsCanAcceptTypes(Info->Types))return nullptr;
-	bool OutBound = false;
-	if (GetUnderItems(InLocation, Info->Size, OutBound).Num() > 0 || OutBound) {
-		return nullptr;
-	}
-
 	auto Id = Info->GetFName();
-
 	FName FullName = FName(*FString::Printf(L"InventoryItem%s", *Id.ToString()), 0);
-	FullName = MakeUniqueObjectName(this, UInventoryItemArea::StaticClass(), FullName);
+	FullName = MakeUniqueObjectName(this, UInventoryItem::StaticClass(), FullName);
 	auto Obj = NewObject<UInventoryItem>(this, UInventoryItem::StaticClass(), FullName);
 	Obj->Area = this;
 	Obj->Info = Info;
-
-	AddItem(Obj, InLocation);
 	return Obj;
 }
 
-const TArray<UInventoryItem*> UInventoryItemArea::GetUnderItems(FIntPoint Location, FIntPoint Size, bool& bOutBound) const
+const TArray<UInventoryItem*> UInventoryItemArea::GetUnderItems(FIntPoint Location, FIntPoint Size) const
 {
 	TSet<UInventoryItem*> Temp;
-	for (int32 y = Location.Y; y < Location.Y + Size.Y; y++)
+
+	auto Y = FMath::Min(Location.Y + Size.Y, Layout.Y);
+	auto X = FMath::Min(Location.X + Size.X, Layout.X);
+
+	for (int32 y = Location.Y; y < Y; y++)
 	{
-		for (int32 x = Location.X; x < Location.X + Size.X; x++)
+		for (int32 x = Location.X; x < X; x++)
 		{
-			auto Index = y * Layout.X + x;
-			if (Items.IsValidIndex(Index) && Items[Index]) Temp.Add(Items[Index]);
+			auto Key = FIntPoint(x, y);
+			if (ItemMap.Contains(Key)) {
+				Temp.Add(ItemMap[Key]);
+			}
 		}
 	}
-	bOutBound = Location.X < 0 || Location.Y < 0 || (Location.X + Size.X > Layout.X) || (Location.Y + Size.Y > Layout.Y);
-
 	return Temp.Array();
 }
 
 
 bool UInventoryItemArea::FindLocation(FIntPoint Size, FIntPoint& OutLocation) const
 {
-	auto IsBlank = [&](FIntPoint Location) {
-		for (int32 y = Location.Y; y < Location.Y + Size.Y; y++)
-		{
-			for (int32 x = Location.X; x < Location.X + Size.X; x++)
-			{
-				auto Index = y * Layout.X + x;
-				if (Items[Index]) return false;
-			}
-		}
-		return true;
-	};
-
-	for (int32 y = 0; y < Layout.Y; y++)
-	{
-		for (int32 x = 0; x < Layout.X; x++)
-		{
-			auto Loc = FIntPoint(x, y);
-			if (IsBlank(Loc)) {
-				OutLocation = Loc;
-				return true;
-			}
-		}
-	}
-	
-	return false;
+	return FindLocation(ItemMap, Size, OutLocation);
 }
 
 
@@ -144,79 +115,170 @@ bool UInventoryItemArea::IsCanAcceptTypes(const TSet<FName>& Other) const
 }
 
 
-const TMap<UInventoryItem*, FIntPoint> UInventoryItemArea::GetItems() const
-{
-	TMap<UInventoryItem*, FIntPoint> Map;
-	for (int32 i = 0; i < Items.Num(); i++)
-	{
-		if (!Items[i])continue;
-		auto Y = i / Layout.X;
-		auto X = i % Layout.X;
-
-		if (!Map.Contains(Items[i])) {
-			Map.Add(Items[i], FIntPoint(X, Y));
-		}
-	}
-	return MoveTemp(Map);
-}
-
-
 void UInventoryItemArea::AddItem(UInventoryItem* Item, const FIntPoint& InLocation)
 {
-	for (int32 y = InLocation.Y; y < InLocation.Y + Item->Info->Size.Y; y++)
-	{
-		for (int32 x = InLocation.X; x < InLocation.X + Item->Info->Size.X; x++)
-		{
-			Items[y * Layout.X + x] = Item;
-		}
-	}
+	SingleItemMap.Add(InLocation, Item);
+	Fill(ItemMap, Item, InLocation);
 	Item->Area = this;
-	OnChanged.Broadcast(Item, EInventoryAreaChangeType::Add, FInventoryAreaChangeParam());
+
+	FInventoryAreaChangedEvent Event = {
+		EInventoryAreaChangeType::Add,
+		Item
+	};
+	OnChanged.Broadcast(Event);
 }
 
 bool UInventoryItemArea::RemoveItem(UInventoryItem* Item)
 {
-	if (!Items.Contains(Item))return false;
-	for (int32 i = 0; i < Items.Num(); i++)
+	bool bHas = false;
+	for (auto It = SingleItemMap.CreateIterator(); It; ++It)
 	{
-		if (Items[i] == Item)Items[i] = nullptr;
+		if (It.Value() == Item) {
+			It.RemoveCurrent();
+			bHas = true;
+		}
 	}
-	Item->Area = nullptr;
-	OnChanged.Broadcast(Item, EInventoryAreaChangeType::Remove, FInventoryAreaChangeParam());
-	return true;
+	for (auto It = ItemMap.CreateIterator(); It; ++It)
+	{
+		if (It.Value() == Item) {
+			It.RemoveCurrent();
+		}
+	}
+	if (bHas) {
+		Item->Area = nullptr;
+		FInventoryAreaChangedEvent Event = {
+			EInventoryAreaChangeType::Remove,
+			Item
+		};
+		OnChanged.Broadcast(Event);
+	}
+	return bHas;
 }
 
 bool UInventoryItemArea::MoveItem(UInventoryItem* Item, const FIntPoint& ToLocation)
 {
-	if (!Items.Contains(Item))return false;
-
-	FIntPoint PreLcation;
-	bool bInitialLocation = false;
-	for (int32 i = 0; i < Items.Num(); i++)
+	FIntPoint PreLcation = -1;
+	for (auto It = SingleItemMap.CreateIterator(); It; ++It)
 	{
-		if (Items[i] == Item) {
-			Items[i] = nullptr;
-
-			if (!bInitialLocation) {
-				bInitialLocation = true;
-				PreLcation = FIntPoint(i % Layout.X, i / Layout.X);
+		if (It.Value() == Item) {
+			It.RemoveCurrent();
+			PreLcation = It.Key();
+		}
+	}
+	if (PreLcation != -1) {
+		for (auto It = ItemMap.CreateIterator(); It; ++It)
+		{
+			if (It.Value() == Item) {
+				It.RemoveCurrent();
 			}
 		}
 	}
-	for (int32 y = ToLocation.Y; y < ToLocation.Y + Item->Info->Size.Y; y++)
+
+	SingleItemMap.Add(ToLocation, Item);
+	Fill(ItemMap, Item, ToLocation);
+
+	FInventoryAreaChangedEvent Event = {
+		EInventoryAreaChangeType::Move,
+		Item
+	};
+
+	/*
+	"FromLocation", PreLcation;
+	"ToLocation", ToLocation;
+	*/
+
+	OnChanged.Broadcast(Event);
+	return true;
+}
+
+
+void UInventoryItemArea::Sort()
+{
+	/*TSet<UInventoryItem*> TempItems;
+	for (size_t i = 0; i < Items.Num(); i++)
 	{
-		for (int32 x = ToLocation.X; x < ToLocation.X + Item->Info->Size.X; x++)
+		TempItems.Add(Items[i]);
+	}
+
+	TArray<UInventoryItem*> NewItems;
+	NewItems.SetNum(Items.Num());
+
+	FIntPoint Location;
+
+	for (auto& Item : TempItems)
+	{
+		if (Item == nullptr) continue;
+		auto Size = Item->Info->Size;
+		if (FindLocation(NewItems, Size, Location)) {
+			Fill(NewItems, Item, Location);
+		}
+	}
+	
+	Items = NewItems;
+
+	FInventoryAreaChangedEvent Event = {
+		EInventoryAreaChangeType::Sort,
+		nullptr
+	};
+	OnChanged.Broadcast(Event);*/
+}
+
+bool UInventoryItemArea::OutofBound(const FIntPoint& Location, const FIntPoint& Size) const
+{
+	bool bInBound = Location.X >= 0 && Location.Y >= 0;
+	bInBound = bInBound && (Location.X + Size.X <= Layout.X);
+	bInBound = bInBound && (Location.Y + Size.Y <= Layout.Y);
+	return !bInBound;
+}
+
+bool UInventoryItemArea::IsBlankWithRange(const TMap<FIntPoint, UInventoryItem*>& InMap, const FIntPoint& InLocation, const FIntPoint& InSize) const
+{
+	for (int32 y = 0; y < InSize.Y; y++)
+	{
+		for (int32 x = 0; x < InSize.X; x++)
 		{
-			Items[y * Layout.X + x] = Item;
+			auto Key = FIntPoint(InLocation.X + x, InLocation.Y + y);
+			if (InMap.Contains(Key)) return false;
+		}
+	}
+	return true;
+}
+
+bool UInventoryItemArea::FindLocation(const TMap<FIntPoint, UInventoryItem*>& InMap, const FIntPoint& InSize, FIntPoint& OutLocation) const
+{
+	OutLocation = FIntPoint(-1);
+	check(InSize.X > 0 && InSize.Y > 0);
+
+	for (int32 y = 0; y < Layout.Y; y++)
+	{
+		for (int32 x = 0; x < Layout.X; x++)
+		{
+			auto Key = FIntPoint(x, y);
+
+			if (InMap.Contains(Key)) continue;
+			if (OutofBound(Key, InSize)) continue;
+
+			if (IsBlankWithRange(InMap, Key, InSize)) {
+				OutLocation = Key;
+				return true;
+			}
 		}
 	}
 
-	FInventoryAreaChangeParam Params;
-	Params.Params.Add("FromLocation", PreLcation);
-	Params.Params.Add("ToLocation", ToLocation);
+	return false;
+}
 
-	OnChanged.Broadcast(Item, EInventoryAreaChangeType::Remove, Params);
-	return true;
+void UInventoryItemArea::Fill(TMap<FIntPoint, UInventoryItem*>& InMap, UInventoryItem* InItem, const FIntPoint& InLocation)
+{
+	auto Size = InItem->Info->Size;
+
+	for (int32 y = 0; y < Size.Y; y++)
+	{
+		for (int32 x = 0; x < Size.X; x++)
+		{
+			InMap.Add(FIntPoint(InLocation.X + x, InLocation.Y + y), InItem);
+		}
+	}
 }
 
 

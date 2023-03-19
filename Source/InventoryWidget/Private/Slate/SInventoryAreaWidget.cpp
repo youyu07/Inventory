@@ -124,11 +124,13 @@ static bool GetCanReplaceItems(const FGeometry& MyGeometry, const FDragDropEvent
 		auto StartLoction = Local - FVector2D(SourceItem->Info->Size) * ItemSize * 0.5f;
 		OutLoc = FIntPoint(FMath::RoundToInt(StartLoction.X / ItemSize.X), FMath::RoundToInt(StartLoction.Y / ItemSize.Y));
 
-		bool OutBound = false;
-		auto Items = CurArea->GetUnderItems(OutLoc, SourceItem->Info->Size, OutBound);
-		if (!OutBound) {
+		if (!CurArea->OutofBound(OutLoc, SourceItem->Info->Size)) {
+			auto Items = CurArea->GetUnderItems(OutLoc, SourceItem->Info->Size);
+
 			if (Items.Num() == 0) { return true; }
-			if (Items.Num() == 1 && Items[0] == SourceItem)return true;
+			if (Items.Num() == 1 && Items[0] == SourceItem) {
+				return true;
+			}
 		}
 	}
 

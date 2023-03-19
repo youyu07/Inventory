@@ -13,7 +13,9 @@ TSharedRef<SWidget> UInventoryAreaWidget::RebuildWidget()
 #endif
     {
         Update();
-        AreaObject->OnChanged.AddDynamic(this, &UInventoryAreaWidget::OnAreaChanged);
+        if (AreaObject) {
+            AreaObject->OnChanged.AddDynamic(this, &UInventoryAreaWidget::OnAreaChanged);
+        }
     }
 
     return MyWidget.ToSharedRef();
@@ -34,7 +36,7 @@ void UInventoryAreaWidget::ReleaseSlateResources(bool bReleaseChildren)
 }
 
 
-void UInventoryAreaWidget::OnAreaChanged(UInventoryItem* Item, EInventoryAreaChangeType Type, const FInventoryAreaChangeParam& Params)
+void UInventoryAreaWidget::OnAreaChanged(const FInventoryAreaChangedEvent& Event)
 {
     Update();
 }
@@ -43,12 +45,14 @@ void UInventoryAreaWidget::Update()
 {
     MyWidget->ClearChildren();
 
-    auto Items = AreaObject->GetItems();
-    for (auto& It : Items)
-    {
-        auto Info = It.Key->Info;
-        MyWidget->AddSlot(It.Value, Info->Size)[
-            SNew(SInventoryItemWidget, It.Key)
-        ];
+    if (AreaObject) {
+        auto Items = AreaObject->GetItems();
+        for (auto& It : Items)
+        {
+            auto Info = It.Value->Info;
+            MyWidget->AddSlot(It.Key, Info->Size)[
+                SNew(SInventoryItemWidget, It.Value)
+            ];
+        }
     }
 }

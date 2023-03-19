@@ -23,7 +23,7 @@ protected:
 	FIntPoint Layout = FIntPoint(9);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ExposeOnSpawn = true))
-	FVector2D ItemSize = 32.0f;
+	FVector2D ItemSize = FVector2D(32.0);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ExposeOnSpawn = true))
 	FLinearColor LineColor = FLinearColor::White;
@@ -40,7 +40,7 @@ public:
 
 private:
 	UFUNCTION()
-	void OnAreaChanged(UInventoryItem* Item, EInventoryAreaChangeType Type, const FInventoryAreaChangeParam& Params);
+	void OnAreaChanged(const FInventoryAreaChangedEvent& Event);
 
 	void Update();
 private:

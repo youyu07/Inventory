@@ -10,12 +10,20 @@ BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 void SInventoryItemWidget::Construct(const FArguments& InArgs, UInventoryItem* InItem)
 {
 	Item = InItem;
-	Background.TintColor = InItem->Info->BackgroundColor;
+
+	if (auto Color = InItem->Info->Attributes.Find("Color")) {
+		Background.TintColor = Color->Get<FLinearColor>();
+	}
+
+	if (auto Icon = InItem->Info->Attributes.Find("Icon")) {
+		IconBrush = Icon->Get<FSlateBrush>();
+	}
+
 	check(Item);
 	auto Panel = SNew(SScaleBox)
 		.StretchDirection(EStretchDirection::DownOnly)
 		.Stretch(EStretch::ScaleToFit)[
-			SNew(SImage).Image(&Item->Info->Icon)
+			SNew(SImage).Image(&IconBrush)
 		];
 
 	ChildSlot.Padding(1.0f)
@@ -71,7 +79,7 @@ TSharedPtr<SWidget> FInventoryItemDragDropOperation::GetDefaultDecorator() const
 		SNew(SScaleBox)
 			.StretchDirection(EStretchDirection::DownOnly)
 			.Stretch(EStretch::ScaleToFit)[
-				SNew(SImage).Image(&GetItem()->Info->Icon)
+				SNew(SImage).Image(&Item->IconBrush)
 			]
 	];
 }

@@ -11,18 +11,23 @@ enum class EInventoryAreaChangeType : uint8
 	Add,
 	Remove,
 	Move,
+	Sort,
 };
 
-USTRUCT(Blueprintable)
-struct INVENTORYSYSTEM_API FInventoryAreaChangeParam
+USTRUCT(BlueprintAble)
+struct FInventoryAreaChangedEvent
 {
 	GENERATED_BODY()
 
 	UPROPERTY(BlueprintReadOnly)
-	TMap<FName, FAny> Params;
+	EInventoryAreaChangeType ChangeType;
+
+	UPROPERTY(BlueprintReadOnly)
+	UInventoryItem* Item = nullptr;
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnInventoryAreaItemChanged, UInventoryItem*, Item, EInventoryAreaChangeType, Type, const FInventoryAreaChangeParam&, Params);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryAreaItemChanged, const FInventoryAreaChangedEvent&, Event);
 
 
 UCLASS()
@@ -39,17 +44,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
 	TSet<FName> Types;
 
-	//物品图标
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	FSlateBrush Icon;
 
-	//物品背景框颜色
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	FLinearColor BackgroundColor = FLinearColor::Transparent;
-
-	//物品其他需要显示的属性
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TMap<FName, FText> Descript;
+	TMap<FName, FAny> Attributes;
 
 public:
 	UFUNCTION(BlueprintCallable, Category = Item)
@@ -107,11 +104,11 @@ public:
 
 	//创建物品对象
 	UFUNCTION(BlueprintCallable, Category = Item)
-	UInventoryItem* MakeItem(UInventoryItemInfo* Info, FIntPoint InLocation);
+	UInventoryItem* MakeItem(UInventoryItemInfo* Info);
 
 	//获取一定范围内的所有物品对象
 	UFUNCTION(BlueprintPure, Category = Item)
-	const TArray<UInventoryItem*> GetUnderItems(FIntPoint Location, FIntPoint Size, bool& bOutBound) const;
+	const TArray<UInventoryItem*> GetUnderItems(FIntPoint Location, FIntPoint Size) const;
 
 	//查找合适的可放入物品的位置，创建物品时会经常使用
 	UFUNCTION(BlueprintPure, Category = Item)
@@ -119,7 +116,10 @@ public:
 
 	//获取区域内的所有物品对象
 	UFUNCTION(BlueprintPure, Category = Item)
-	const TMap<UInventoryItem*, FIntPoint> GetItems() const;
+	const TMap<FIntPoint, UInventoryItem*> GetItems() const
+	{
+		return SingleItemMap;
+	}
 
 	//向区域内添加物品，添加前请使用IsCanAcceptTypes判断此区域是否接受物品类型
 	UFUNCTION(BlueprintCallable, Category = Item)
@@ -136,7 +136,26 @@ public:
 	//判断此区域是否接受传入的物品类型
 	UFUNCTION(BlueprintPure, Category = Item)
 	bool IsCanAcceptTypes(const TSet<FName>& Other) const;
+
+
+	UFUNCTION(BlueprintCallable, Category = Item)
+	void Sort();
+
+	bool OutofBound(const FIntPoint& Location, const FIntPoint& Size) const;
 private:
+	bool IsBlankWithRange(const TMap<FIntPoint, UInventoryItem*>& InMap, const FIntPoint& InLocation, const FIntPoint& InSize) const;
+
+	bool FindLocation(const TMap<FIntPoint, UInventoryItem*>& InMap, const FIntPoint& InSize, FIntPoint& OutLocation) const;
+
+	void Fill(TMap<FIntPoint, UInventoryItem*>& InMap, UInventoryItem* InItem, const FIntPoint& InLocation);
+
+
 	UPROPERTY(Transient)
-	TArray<UInventoryItem*> Items;
+	TMap<FIntPoint, UInventoryItem*> SingleItemMap;
+
+
+	TMap<FIntPoint, UInventoryItem*> ItemMap;
+
+	/*UPROPERTY(Transient)
+	TArray<UInventoryItem*> Items;*/
 };

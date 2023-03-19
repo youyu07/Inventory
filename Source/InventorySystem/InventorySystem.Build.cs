@@ -45,7 +45,15 @@ public class InventorySystem : ModuleRules
 
 
 		if (Target.Type == TargetRules.TargetType.Editor) {
-			PrivateDependencyModuleNames.Add("MessageLog");
-		}
+            PrivateDependencyModuleNames.AddRange(
+				new string[]
+				{
+					"MessageLog",
+					"UnrealEd",
+                    "EditorSubsystem",
+                    "AssetRegistry"
+                }
+            );
+        }
 	}
 }

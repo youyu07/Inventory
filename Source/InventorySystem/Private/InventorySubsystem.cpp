@@ -1,6 +1,6 @@
 #include "InventorySubsystem.h"
 #include "InventoryTypes.h"
-#include "AssetRegistryModule.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 
 #if WITH_EDITOR
 #include "Logging/MessageLog.h"
@@ -16,7 +16,7 @@ void UInventorySubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	UInventoryItemInfo::Map.Empty();
 	const FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
 	TArray<FAssetData> Assets;
-	AssetRegistryModule.Get().GetAssetsByClass(UInventoryItemInfo::StaticClass()->GetFName(), Assets, true);
+	AssetRegistryModule.Get().GetAssetsByClass(FTopLevelAssetPath(UInventoryItemInfo::StaticClass()->GetPathName()), Assets, true);
 
 #if WITH_EDITOR
 	TSet<UObject*> DuplicateObject;

@@ -45,7 +45,7 @@ public:
 
 private:
 	UInventoryItem* Item;
-	FSlateBrush Background;
+	FSlateBrush Background, IconBrush;
 
 	friend class FInventoryItemDragDropOperation;
 };
